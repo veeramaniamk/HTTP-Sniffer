@@ -25,9 +25,6 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
-    private final HostFilter hostFilter;
-    private final TrafficLogger trafficLogger;
-
     // LRU-bounded map to prevent memory leak for disconnected/aborted requests
     private final Map<HttpRequest, PendingRequest> pendingRequests = Collections.synchronizedMap(
             new LinkedHashMap<>(256, 0.75f, true) {
@@ -38,9 +35,26 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
             }
     );
 
+    private final HostFilter hostFilter;
+    private final TrafficLogger trafficLogger;
+    private final com.apisniffer.device.DeviceManager deviceManager;
+    private java.util.function.Consumer<InterceptedTraffic> trafficBroadcaster;
+
     public HttpTrafficInterceptor(HostFilter hostFilter, TrafficLogger trafficLogger) {
+        this(hostFilter, trafficLogger, null, null);
+    }
+
+    public HttpTrafficInterceptor(HostFilter hostFilter, TrafficLogger trafficLogger,
+                                  com.apisniffer.device.DeviceManager deviceManager,
+                                  java.util.function.Consumer<InterceptedTraffic> trafficBroadcaster) {
         this.hostFilter = hostFilter;
         this.trafficLogger = trafficLogger;
+        this.deviceManager = deviceManager;
+        this.trafficBroadcaster = trafficBroadcaster;
+    }
+
+    public void setTrafficBroadcaster(java.util.function.Consumer<InterceptedTraffic> trafficBroadcaster) {
+        this.trafficBroadcaster = trafficBroadcaster;
     }
 
     private static final io.netty.util.AttributeKey<PendingRequest> ATTR_PENDING =
@@ -63,6 +77,25 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
             pending.parsedUrl = parsedUrl;
             pending.headers = extractHeaders(request.headers());
             pending.body = (contents != null) ? contents.getTextContents() : "";
+
+            // Extract client IP address
+            String clientIp = "127.0.0.1";
+            if (messageInfo != null && messageInfo.getChannelHandlerContext() != null) {
+                java.net.SocketAddress remoteAddr = messageInfo.getChannelHandlerContext().channel().remoteAddress();
+                if (remoteAddr instanceof java.net.InetSocketAddress inet) {
+                    clientIp = inet.getAddress().getHostAddress();
+                }
+            }
+            pending.clientIp = clientIp;
+
+            // Track device activity
+            String userAgent = (request.headers() != null) ? request.headers().get("User-Agent") : null;
+            if (deviceManager != null) {
+                com.apisniffer.device.DeviceInfo dev = deviceManager.recordActivity(clientIp, userAgent);
+                pending.clientDevice = (dev != null) ? dev.getName() : clientIp;
+            } else {
+                pending.clientDevice = clientIp;
+            }
 
             HttpRequest key = (messageInfo != null && messageInfo.getOriginalRequest() != null)
                     ? messageInfo.getOriginalRequest() : request;
@@ -102,6 +135,8 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
             InterceptedTraffic traffic = new InterceptedTraffic();
             traffic.setTimestamp(pending.timestamp);
             traffic.setDurationMs(durationMs);
+            traffic.setClientIp(pending.clientIp);
+            traffic.setClientDevice(pending.clientDevice);
             traffic.setMethod(pending.method);
             traffic.setUrl(pending.parsedUrl.fullUrl);
             traffic.setBaseUrl(pending.parsedUrl.baseUrl);
@@ -122,6 +157,10 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
             traffic.setOriginalResponseBodyLength(respBody != null ? respBody.length() : 0);
 
             trafficLogger.logTraffic(traffic);
+
+            if (trafficBroadcaster != null) {
+                trafficBroadcaster.accept(traffic);
+            }
         } catch (Exception e) {
             // Ignore filter error to avoid interrupting proxy client traffic
         }
@@ -204,6 +243,8 @@ public class HttpTrafficInterceptor implements RequestFilter, ResponseFilter {
     private static class PendingRequest {
         String timestamp;
         long startTimeMs;
+        String clientIp;
+        String clientDevice;
         String method;
         ParsedUrl parsedUrl;
         Map<String, String> headers;

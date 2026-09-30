@@ -14,6 +14,9 @@ public class InterceptedTraffic {
     private String timestamp;
     private long durationMs;
 
+    private String clientIp;
+    private String clientDevice;
+
     private String method;
     private String url;
     private String baseUrl;
@@ -57,6 +60,22 @@ public class InterceptedTraffic {
 
     public void setDurationMs(long durationMs) {
         this.durationMs = durationMs;
+    }
+
+    public String getClientIp() {
+        return clientIp;
+    }
+
+    public void setClientIp(String clientIp) {
+        this.clientIp = clientIp;
+    }
+
+    public String getClientDevice() {
+        return clientDevice;
+    }
+
+    public void setClientDevice(String clientDevice) {
+        this.clientDevice = clientDevice;
     }
 
     public String getMethod() {

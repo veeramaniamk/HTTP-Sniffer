@@ -35,9 +35,11 @@ public class ConsoleFormatter {
     private String formatCompact(InterceptedTraffic traffic) {
         String mColor = methodColor(traffic.getMethod());
         String sColor = statusColor(traffic.getStatusCode());
+        String devStr = (traffic.getClientIp() != null) ? colorize(CYAN, "[" + traffic.getClientIp() + "] ") : "";
 
-        return String.format("%s %s %s -> %s (%d ms)",
+        return String.format("%s %s%s %s -> %s (%d ms)",
                 colorize(DIM, "[" + traffic.getTimestamp() + "]"),
+                devStr,
                 colorize(BOLD + mColor, traffic.getMethod()),
                 colorize(BOLD, traffic.getUrl()),
                 colorize(BOLD + sColor, traffic.getStatusCode() + " " + traffic.getStatusMessage()),
@@ -48,14 +50,16 @@ public class ConsoleFormatter {
         StringBuilder sb = new StringBuilder();
         String mColor = methodColor(traffic.getMethod());
         String sColor = statusColor(traffic.getStatusCode());
+        String devBadge = (traffic.getClientIp() != null) ? " " + colorize(CYAN, "[" + traffic.getClientIp() + "]") : "";
 
         // Header separator
         sb.append(colorize(DIM, "─".repeat(80))).append("\n");
 
-        // Top line: [Timestamp] #ID METHOD URL
-        sb.append(String.format("%s %s %s %s\n",
+        // Top line: [Timestamp] #ID [ClientIP] METHOD URL
+        sb.append(String.format("%s %s%s %s %s\n",
                 colorize(DIM, "[" + traffic.getTimestamp() + "]"),
                 colorize(DIM, "#" + traffic.getId()),
+                devBadge,
                 colorize(BOLD + mColor, traffic.getMethod()),
                 colorize(BOLD, traffic.getUrl())
         ));
@@ -64,6 +68,11 @@ public class ConsoleFormatter {
 
         // Request Section
         sb.append(colorize(BOLD + CYAN, "▶ REQUEST\n"));
+        if (traffic.getClientIp() != null) {
+            String devName = (traffic.getClientDevice() != null && !traffic.getClientDevice().equals(traffic.getClientIp()))
+                    ? " (" + traffic.getClientDevice() + ")" : "";
+            sb.append("   ").append(colorize(DIM, "Client:    ")).append(colorize(CYAN, traffic.getClientIp() + devName)).append("\n");
+        }
         sb.append("   ").append(colorize(DIM, "Method:    ")).append(colorize(mColor, traffic.getMethod())).append("\n");
         sb.append("   ").append(colorize(DIM, "Base URL:  ")).append(traffic.getBaseUrl()).append("\n");
         sb.append("   ").append(colorize(DIM, "Endpoint:  ")).append(colorize(BOLD, traffic.getPath())).append("\n");

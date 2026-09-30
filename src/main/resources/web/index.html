@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApiSniffer — Network Traffic Inspector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: #151f38;
+      --bg-hover: #1e294b;
+      --bg-active: #23325c;
+      --border-subtle: #1e293b;
+      --border-focus: #3b82f6;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Navigation Header */
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.6rem 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #93c5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-subtle);
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-family: var(--font-code);
+      font-size: 0.8rem;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+
+    .pulse-dot.blue {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .btn {
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-color: #3b82f6;
+      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface);
+      border-color: var(--border-subtle);
+      color: var(--text-muted);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-main);
+      border-color: #334155;
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.1);
+      border-color: rgba(244, 63, 94, 0.3);
+      color: #fda4af;
+    }
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.2);
+    }
+
+    /* Main Container (3 Panes) */
+    .app-main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 500px;
+      overflow: hidden;
+    }
+
+    /* Left Pane: Devices */
+    .pane-devices {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pane-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .devices-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .device-card {
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      user-select: none;
+    }
+
+    .device-card:hover {
+      background: var(--bg-hover);
+    }
+
+    .device-card.active {
+      background: var(--bg-active);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+    }
+
+    .device-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .device-name-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      font-size: 0.88rem;
+    }
+
+    .device-icon {
+      font-size: 1rem;
+    }
+
+    .badge-hotspot {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .device-sub {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: var(--font-code);
+    }
+
+    .device-counter {
+      background: rgba(30, 41, 59, 0.8);
+      padding: 0.1rem 0.45rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Middle Pane: Traffic Feed */
+    .pane-traffic {
+      background: var(--bg-base);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .traffic-toolbar {
+      padding: 0.6rem 0.9rem;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .search-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.4rem 0.75rem;
+      gap: 0.5rem;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .search-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      width: 100%;
+    }
+
+    .method-filters {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .filter-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-chip:hover {
+      color: var(--text-main);
+      border-color: #475569;
+    }
+
+    .filter-chip.active {
+      background: #1e293b;
+      color: #60a5fa;
+      border-color: var(--accent-blue);
+    }
+
+    .traffic-table-container {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .traffic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .traffic-table th {
+      position: sticky;
+      top: 0;
+      background: #0d1322;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-dim);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.5rem 0.8rem;
+      text-align: left;
+      font-weight: 600;
+      z-index: 10;
+    }
+
+    .traffic-row {
+      border-bottom: 1px solid rgba(30, 41, 59, 0.4);
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .traffic-row:hover {
+      background: rgba(30, 41, 59, 0.5);
+    }
+
+    .traffic-row.selected {
+      background: rgba(59, 130, 246, 0.15) !important;
+      border-left: 3px solid var(--accent-blue);
+    }
+
+    .traffic-row td {
+      padding: 0.5rem 0.8rem;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    .col-id {
+      font-family: var(--font-code);
+      color: var(--text-dim);
+      width: 40px;
+    }
+
+    .col-method {
+      width: 75px;
+    }
+
+    .badge-method {
+      display: inline-block;
+      font-family: var(--font-code);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-align: center;
+      min-width: 58px;
+    }
+
+    .method-get { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+    .method-post { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .method-put { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .method-delete { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+    .method-patch { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+    .method-options, .method-head { background: rgba(100, 116, 139, 0.15); color: var(--text-dim); border: 1px solid rgba(100, 116, 139, 0.3); }
+
+    .badge-status {
+      font-family: var(--font-code);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+    }
+    .status-2xx { color: var(--accent-emerald); background: rgba(16, 185, 129, 0.12); }
+    .status-3xx { color: var(--accent-cyan); background: rgba(6, 182, 212, 0.12); }
+    .status-4xx { color: var(--accent-amber); background: rgba(245, 158, 11, 0.12); }
+    .status-5xx { color: var(--accent-rose); background: rgba(244, 63, 94, 0.12); }
+
+    .col-url {
+      font-family: var(--font-code);
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .url-host {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    .url-path {
+      color: #93c5fd;
+    }
+
+    .col-device {
+      font-family: var(--font-code);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .col-time {
+      font-family: var(--font-code);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    /* Right Pane: Inspector */
+    .pane-inspector {
+      background: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .inspector-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      padding: 2rem;
+      text-align: center;
+      gap: 1rem;
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      opacity: 0.4;
+    }
+
+    .inspector-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .inspector-header {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #0d1527;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .inspector-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .inspector-url {
+      font-family: var(--font-code);
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: #60a5fa;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+      max-height: 70px;
+      overflow-y: auto;
+    }
+
+    .tabs {
+      display: flex;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .tab {
+      padding: 0.6rem 1.2rem;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .tab:hover {
+      color: var(--text-main);
+    }
+
+    .tab.active {
+      color: #60a5fa;
+      border-bottom-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 0.4rem 0.8rem;
+      font-size: 0.82rem;
+      background: var(--bg-card);
+      padding: 0.85rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .meta-label {
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .meta-val {
+      font-family: var(--font-code);
+      color: var(--text-main);
+      word-break: break-all;
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .code-box {
+      background: #060912;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.75rem;
+      font-family: var(--font-code);
+      font-size: 0.8rem;
+      color: #e2e8f0;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 380px;
+    }
+
+    .headers-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      background: var(--bg-card);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .headers-table th, .headers-table td {
+      padding: 0.45rem 0.7rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-code);
+    }
+
+    .headers-table th {
+      background: #0d1527;
+      color: var(--text-dim);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+
+    .headers-table td:first-child {
+      color: var(--accent-cyan);
+      width: 35%;
+      font-weight: 500;
+    }
+
+    .copy-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .copy-btn:hover {
+      color: var(--text-main);
+      background: #334155;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1e293b;
+      color: var(--text-main);
+      border: 1px solid var(--border-focus);
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s ease;
+      z-index: 1000;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🕵️</div>
+      <div class="brand-title">ApiSniffer</div>
+      <span class="brand-badge">MITM Proxy</span>
+    </div>
+
+    <div class="header-center">
+      <div class="status-pill">
+        <span class="pulse-dot"></span>
+        <span>PROXY: <strong id="lbl-proxy-port">8080</strong></span>
+      </div>
+      <div class="status-pill" id="pill-hotspot">
+        <span class="pulse-dot blue"></span>
+        <span>HOTSPOT: <strong id="lbl-hotspot-ip">192.168.137.1</strong></span>
+      </div>
+      <div class="status-pill">
+        <span>LOGGED: <strong id="lbl-total-count" style="color: var(--accent-emerald);">0</strong></span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a href="/api/ca.pem" download="ca.pem" class="btn btn-primary" title="Download Root CA Certificate to install on your mobile device">
+        📥 Download CA Cert
+      </a>
+      <button class="btn btn-secondary" id="btn-pause" onclick="togglePause()">
+        ⏸️ Pause
+      </button>
+      <button class="btn btn-danger" onclick="clearLogs()" title="Clear current session traffic">
+        🗑️ Clear
+      </button>
+    </div>
+  </header>
+
+  <!-- 3-Pane App Content -->
+  <main class="app-main">
+
+    <!-- Pane 1: Connected Devices -->
+    <aside class="pane-devices">
+      <div class="pane-header">
+        <span>Connected Devices</span>
+        <button class="copy-btn" onclick="fetchDevices()" title="Refresh devices">↻ Refresh</button>
+      </div>
+
+      <div class="devices-list" id="devices-list">
+        <!-- "All Devices" option -->
+        <div class="device-card active" id="dev-all" onclick="selectDevice('all')">
+          <div class="device-top">
+            <div class="device-name-group">
+              <span class="device-icon">🌐</span>
+              <span>All Devices</span>
+            </div>
+            <span class="device-counter" id="cnt-all">0</span>
+          </div>
+          <div class="device-sub">
+            <span>Show all network calls</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Pane 2: Live Network Traffic Stream -->
+    <section class="pane-traffic">
+      <div class="traffic-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" id="input-search" class="search-input" placeholder="Search URL, endpoint, status, or method..." oninput="applyFilters()">
+        </div>
+
+        <div class="method-filters">
+          <button class="filter-chip active" onclick="setMethodFilter('ALL')">ALL</button>
+          <button class="filter-chip" onclick="setMethodFilter('GET')">GET</button>
+          <button class="filter-chip" onclick="setMethodFilter('POST')">POST</button>
+          <button class="filter-chip" onclick="setMethodFilter('PUT')">PUT</button>
+          <button class="filter-chip" onclick="setMethodFilter('DELETE')">DELETE</button>
+        </div>
+      </div>
+
+      <div class="traffic-table-container">
+        <table class="traffic-table">
+          <thead>
+            <tr>
+              <th class="col-id">#</th>
+              <th class="col-method">Method</th>
+              <th>Host & Path</th>
+              <th>Status</th>
+              <th>Device IP</th>
+              <th>Duration</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="traffic-tbody">
+            <!-- Intercepted rows populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Pane 3: Request & Response Inspector -->
+    <aside class="pane-inspector">
+      <!-- Empty State -->
+      <div class="inspector-empty" id="inspector-empty">
+        <div class="empty-icon">📡</div>
+        <div style="font-weight: 600; color: var(--text-muted);">No Request Selected</div>
+        <div style="font-size: 0.8rem; max-width: 240px;">Select an intercepted network call from the list to inspect full headers, query parameters, and bodies.</div>
+      </div>
+
+      <!-- Inspector Details Pane -->
+      <div class="inspector-content" id="inspector-content" style="display: none;">
+        <div class="inspector-header">
+          <div class="inspector-top-row">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="badge-method" id="insp-method">GET</span>
+              <span class="badge-status" id="insp-status">200 OK</span>
+              <span style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-dim);" id="insp-duration">0 ms</span>
+            </div>
+            <button class="copy-btn" onclick="copyCurl()">Copy cURL</button>
+          </div>
+          <div class="inspector-url" id="insp-url">https://api.example.com/v1/resource</div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('request')">Request</div>
+          <div class="tab" onclick="switchTab('response')">Response</div>
+          <div class="tab" onclick="switchTab('overview')">Overview</div>
+        </div>
+
+        <!-- Tab 1: Request -->
+        <div class="tab-content" id="tab-request">
+          <div class="section-title">
+            <span>Request Headers</span>
+            <button class="copy-btn" onclick="copyText('insp-req-headers-raw')">Copy Headers</button>
+          </div>
+          <table class="headers-table" id="table-req-headers">
+            <tbody></tbody>
+          </table>
+
+          <div class="section-title">
+            <span>Request Body</span>
+            <button class="copy-btn" onclick="copyText('insp-req-body')">Copy Body</button>
+          </div>
+          <div class="code-box" id="insp-req-body">(Empty)</div>
+        </div>
+
+        <!-- Tab 2: Response -->
+        <div class="tab-content" id="tab-response" style="display: none;">
+          <div class="section-title">
+            <span>Response Headers</span>
+            <button class="copy-btn" onclick="copyText('insp-resp-headers-raw')">Copy Headers</button>
+          </div>
+          <table class="headers-table" id="table-resp-headers">
+            <tbody></tbody>
+          </table>
+
+          <div class="section-title">
+            <span>Response Body</span>
+            <button class="copy-btn" onclick="copyText('insp-resp-body')">Copy Body</button>
+          </div>
+          <div class="code-box" id="insp-resp-body">(Empty)</div>
+        </div>
+
+        <!-- Tab 3: Overview -->
+        <div class="tab-content" id="tab-overview" style="display: none;">
+          <div class="meta-grid" id="meta-overview">
+            <div class="meta-label">Client IP:</div>
+            <div class="meta-val" id="meta-client-ip">-</div>
+            <div class="meta-label">Client Device:</div>
+            <div class="meta-val" id="meta-client-device">-</div>
+            <div class="meta-label">Timestamp:</div>
+            <div class="meta-val" id="meta-timestamp">-</div>
+            <div class="meta-label">Roundtrip:</div>
+            <div class="meta-val" id="meta-duration">-</div>
+            <div class="meta-label">Base URL:</div>
+            <div class="meta-val" id="meta-base-url">-</div>
+            <div class="meta-label">Endpoint:</div>
+            <div class="meta-val" id="meta-path">-</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script>
+    // State
+    let allTraffic = [];
+    let knownDevices = [];
+    let selectedDeviceId = 'all'; // 'all' or device IP
+    let selectedMethodFilter = 'ALL';
+    let selectedTrafficItem = null;
+    let isPaused = false;
+    let eventSource = null;
+
+    // Device counts map
+    const deviceTrafficCounts = {};
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchStatus();
+      fetchDevices();
+      fetchInitialTraffic();
+      initEventSource();
+    });
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('lbl-proxy-port').textContent = data.proxyPort || '8080';
+          if (data.hotspotIp) {
+            document.getElementById('lbl-hotspot-ip').textContent = data.hotspotIp;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch status:', e);
+      }
+    }
+
+    async function fetchDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        if (res.ok) {
+          knownDevices = await res.json();
+          renderDeviceList();
+        }
+      } catch (e) {
+        console.error('Failed to fetch devices:', e);
+      }
+    }
+
+    async function fetchInitialTraffic() {
+      try {
+        const res = await fetch('/api/traffic');
+        if (res.ok) {
+          const list = await res.json();
+          allTraffic = list;
+          recomputeDeviceCounts();
+          renderTrafficTable();
+        }
+      } catch (e) {
+        console.error('Failed to fetch initial traffic:', e);
+      }
+    }
+
+    function initEventSource() {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      eventSource = new EventSource('/api/traffic/stream');
+
+      eventSource.addEventListener('traffic', (e) => {
+        if (isPaused) return;
+        try {
+          const traffic = JSON.parse(e.data);
+          allTraffic.unshift(traffic); // Newest first
+
+          // Increment count for this device
+          const ip = traffic.clientIp || 'unknown';
+          deviceTrafficCounts[ip] = (deviceTrafficCounts[ip] || 0) + 1;
+          deviceTrafficCounts['all'] = (deviceTrafficCounts['all'] || 0) + 1;
+
+          document.getElementById('lbl-total-count').textContent = allTraffic.length;
+          updateDeviceCardCount(ip);
+          updateDeviceCardCount('all');
+
+          // Append to table if it matches current filter
+          if (matchesFilter(traffic)) {
+            renderTrafficRow(traffic, true);
+          }
+        } catch (err) {
+          console.error('Error handling SSE traffic event:', err);
+        }
+      });
+
+      eventSource.addEventListener('device', (e) => {
+        try {
+          const device = JSON.parse(e.data);
+          const existingIdx = knownDevices.findIndex(d => d.ip === device.ip);
+          if (existingIdx !== -1) {
+            knownDevices[existingIdx] = device;
+          } else {
+            knownDevices.push(device);
+          }
+          renderDeviceList();
+        } catch (err) {
+          console.error('Error handling SSE device event:', err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        // SSE will automatically retry connection
+      };
+    }
+
+    function recomputeDeviceCounts() {
+      for (const key in deviceTrafficCounts) delete deviceTrafficCounts[key];
+      deviceTrafficCounts['all'] = allTraffic.length;
+
+      for (const t of allTraffic) {
+        const ip = t.clientIp || 'unknown';
+        deviceTrafficCounts[ip] = (deviceTrafficCounts[ip] || 0) + 1;
+      }
+      document.getElementById('lbl-total-count').textContent = allTraffic.length;
+    }
+
+    function renderDeviceList() {
+      const container = document.getElementById('devices-list');
+      // Keep the "All Devices" element
+      const allCard = document.getElementById('dev-all');
+      container.innerHTML = '';
+      container.appendChild(allCard);
+
+      document.getElementById('cnt-all').textContent = deviceTrafficCounts['all'] || allTraffic.length;
+
+      knownDevices.forEach(device => {
+        const card = document.createElement('div');
+        card.className = `device-card ${selectedDeviceId === device.ip ? 'active' : ''}`;
+        card.id = `dev-${device.ip.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        card.onclick = () => selectDevice(device.ip);
+
+        const icon = device.isHotspot ? '📱' : '💻';
+        const badge = device.isHotspot ? '<span class="badge-hotspot">HOTSPOT</span>' : '';
+        const count = deviceTrafficCounts[device.ip] || device.requestCount || 0;
+
+        card.innerHTML = `
+          <div class="device-top">
+            <div class="device-name-group">
+              <span class="device-icon">${icon}</span>
+              <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(device.name || device.ip)}</span>
+            </div>
+            ${badge}
+            <span class="device-counter" id="cnt-${device.ip.replace(/[^a-zA-Z0-9]/g, '_')}">${count}</span>
+          </div>
+          <div class="device-sub">
+            <span>${escapeHtml(device.ip)}</span>
+            <span>${device.mac ? escapeHtml(device.mac) : ''}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function updateDeviceCardCount(ip) {
+      if (ip === 'all') {
+        const el = document.getElementById('cnt-all');
+        if (el) el.textContent = deviceTrafficCounts['all'] || 0;
+        return;
+      }
+      const safeId = ip.replace(/[^a-zA-Z0-9]/g, '_');
+      const el = document.getElementById(`cnt-${safeId}`);
+      if (el) {
+        el.textContent = deviceTrafficCounts[ip] || 0;
+      } else {
+        // New device seen, refresh devices list
+        fetchDevices();
+      }
+    }
+
+    function selectDevice(ip) {
+      selectedDeviceId = ip;
+
+      // Update UI active class
+      document.querySelectorAll('.device-card').forEach(c => c.classList.remove('active'));
+      if (ip === 'all') {
+        document.getElementById('dev-all').classList.add('active');
+      } else {
+        const safeId = ip.replace(/[^a-zA-Z0-9]/g, '_');
+        const el = document.getElementById(`dev-${safeId}`);
+        if (el) el.classList.add('active');
+      }
+
+      applyFilters();
+    }
+
+    function setMethodFilter(method) {
+      selectedMethodFilter = method;
+      document.querySelectorAll('.filter-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === method);
+      });
+      applyFilters();
+    }
+
+    function matchesFilter(traffic) {
+      // 1. Device filter
+      if (selectedDeviceId !== 'all' && traffic.clientIp !== selectedDeviceId) {
+        return false;
+      }
+
+      // 2. Method filter
+      if (selectedMethodFilter !== 'ALL' && traffic.method.toUpperCase() !== selectedMethodFilter) {
+        return false;
+      }
+
+      // 3. Search query
+      const query = document.getElementById('input-search').value.trim().toLowerCase();
+      if (query) {
+        const matchUrl = traffic.url && traffic.url.toLowerCase().includes(query);
+        const matchMethod = traffic.method && traffic.method.toLowerCase().includes(query);
+        const matchStatus = String(traffic.statusCode).includes(query);
+        const matchIp = traffic.clientIp && traffic.clientIp.toLowerCase().includes(query);
+        if (!matchUrl && !matchMethod && !matchStatus && !matchIp) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function applyFilters() {
+      const tbody = document.getElementById('traffic-tbody');
+      tbody.innerHTML = '';
+
+      const filtered = allTraffic.filter(matchesFilter);
+      filtered.forEach(t => renderTrafficRow(t, false));
+    }
+
+    function renderTrafficRow(t, prepend) {
+      const tbody = document.getElementById('traffic-tbody');
+
+      const tr = document.createElement('tr');
+      tr.className = `traffic-row ${selectedTrafficItem && selectedTrafficItem.id === t.id ? 'selected' : ''}`;
+      tr.id = `row-${t.id}`;
+      tr.onclick = () => selectTrafficItem(t);
+
+      const m = t.method.toLowerCase();
+      const statusClass = `status-${Math.floor(t.statusCode / 100)}xx`;
+
+      tr.innerHTML = `
+        <td class="col-id">${t.id}</td>
+        <td class="col-method"><span class="badge-method method-${m}">${escapeHtml(t.method)}</span></td>
+        <td class="col-url">
+          <span class="url-host">${escapeHtml(t.host || '')}</span>
+          <span class="url-path">${escapeHtml(t.path || '/')}</span>
+        </td>
+        <td><span class="badge-status ${statusClass}">${t.statusCode} ${escapeHtml(t.statusMessage || '')}</span></td>
+        <td class="col-device">${escapeHtml(t.clientIp || '127.0.0.1')}</td>
+        <td style="font-family: var(--font-code); font-size: 0.75rem; color: var(--text-dim);">${t.durationMs} ms</td>
+        <td class="col-time">${escapeHtml(t.timestamp ? t.timestamp.split(' ')[1] || t.timestamp : '')}</td>
+      `;
+
+      if (prepend && tbody.firstChild) {
+        tbody.insertBefore(tr, tbody.firstChild);
+      } else {
+        tbody.appendChild(tr);
+      }
+    }
+
+    function selectTrafficItem(traffic) {
+      selectedTrafficItem = traffic;
+
+      // Update row selection
+      document.querySelectorAll('.traffic-row').forEach(r => r.classList.remove('selected'));
+      const row = document.getElementById(`row-${traffic.id}`);
+      if (row) row.classList.add('selected');
+
+      // Hide empty state, show inspector
+      document.getElementById('inspector-empty').style.display = 'none';
+      document.getElementById('inspector-content').style.display = 'flex';
+
+      // Header
+      const m = traffic.method.toLowerCase();
+      const inspMethod = document.getElementById('insp-method');
+      inspMethod.textContent = traffic.method;
+      inspMethod.className = `badge-method method-${m}`;
+
+      const inspStatus = document.getElementById('insp-status');
+      inspStatus.textContent = `${traffic.statusCode} ${traffic.statusMessage || ''}`;
+      inspStatus.className = `badge-status status-${Math.floor(traffic.statusCode / 100)}xx`;
+
+      document.getElementById('insp-duration').textContent = `${traffic.durationMs} ms`;
+      document.getElementById('insp-url').textContent = traffic.url;
+
+      // Overview Tab
+      document.getElementById('meta-client-ip').textContent = traffic.clientIp || '-';
+      document.getElementById('meta-client-device').textContent = traffic.clientDevice || '-';
+      document.getElementById('meta-timestamp').textContent = traffic.timestamp || '-';
+      document.getElementById('meta-duration').textContent = `${traffic.durationMs} ms`;
+      document.getElementById('meta-base-url').textContent = traffic.baseUrl || '-';
+      document.getElementById('meta-path').textContent = traffic.path || '-';
+
+      // Request Headers
+      renderHeadersTable('table-req-headers', traffic.requestHeaders);
+
+      // Request Body
+      const reqBodyEl = document.getElementById('insp-req-body');
+      reqBodyEl.textContent = formatPrettyJson(traffic.requestBody) || '(Empty body)';
+
+      // Response Headers
+      renderHeadersTable('table-resp-headers', traffic.responseHeaders);
+
+      // Response Body
+      const respBodyEl = document.getElementById('insp-resp-body');
+      respBodyEl.textContent = formatPrettyJson(traffic.responseBody) || '(Empty body)';
+    }
+
+    function renderHeadersTable(tableId, headers) {
+      const tbody = document.querySelector(`#${tableId} tbody`);
+      tbody.innerHTML = '';
+      if (!headers || Object.keys(headers).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="color: var(--text-dim); text-align: center;">No headers</td></tr>';
+        return;
+      }
+      for (const [key, val] of Object.entries(headers)) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(key)}</td><td>${escapeHtml(val)}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function formatPrettyJson(raw) {
+      if (!raw || !raw.trim()) return '';
+      try {
+        const parsed = JSON.parse(raw);
+        return JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        return raw;
+      }
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', t.textContent.toLowerCase() === tabName);
+      });
+      document.getElementById('tab-request').style.display = (tabName === 'request') ? 'flex' : 'none';
+      document.getElementById('tab-response').style.display = (tabName === 'response') ? 'flex' : 'none';
+      document.getElementById('tab-overview').style.display = (tabName === 'overview') ? 'flex' : 'none';
+    }
+
+    function togglePause() {
+      isPaused = !isPaused;
+      const btn = document.getElementById('btn-pause');
+      btn.textContent = isPaused ? '▶ Resume' : '⏸️ Pause';
+      btn.classList.toggle('btn-primary', isPaused);
+      btn.classList.toggle('btn-secondary', !isPaused);
+    }
+
+    async function clearLogs() {
+      try {
+        await fetch('/api/clear', { method: 'POST' });
+        allTraffic = [];
+        recomputeDeviceCounts();
+        document.getElementById('traffic-tbody').innerHTML = '';
+        document.getElementById('inspector-empty').style.display = 'flex';
+        document.getElementById('inspector-content').style.display = 'none';
+        selectedTrafficItem = null;
+        showToast('Traffic logs cleared.');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function copyCurl() {
+      if (!selectedTrafficItem) return;
+      const t = selectedTrafficItem;
+      let curl = `curl -X ${t.method} "${t.url}"`;
+      if (t.requestHeaders) {
+        for (const [k, v] of Object.entries(t.requestHeaders)) {
+          curl += ` \\\n  -H "${k}: ${v}"`;
+        }
+      }
+      if (t.requestBody) {
+        curl += ` \\\n  --data '${t.requestBody.replace(/'/g, "'\\''")}'`;
+      }
+      navigator.clipboard.writeText(curl).then(() => showToast('Copied cURL to clipboard!'));
+    }
+
+    function copyText(elementId) {
+      const el = document.getElementById(elementId);
+      if (el) {
+        navigator.clipboard.writeText(el.textContent).then(() => showToast('Copied to clipboard!'));
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

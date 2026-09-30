@@ -61,6 +61,19 @@ public class ApiSnifferCli implements Callable<Integer> {
     )
     private boolean noBody;
 
+    @Option(
+            names = {"--web-port"},
+            description = "Web dashboard listening port (default: ${DEFAULT-VALUE})",
+            defaultValue = "8081"
+    )
+    private int webPort;
+
+    @Option(
+            names = {"--no-web"},
+            description = "Disable web dashboard interface"
+    )
+    private boolean noWeb;
+
     private final CountDownLatch keepAliveLatch = new CountDownLatch(1);
 
     @Override
@@ -104,20 +117,46 @@ public class ApiSnifferCli implements Callable<Integer> {
 
             TrafficLogger trafficLogger = new TrafficLogger(quiet, noBody, saveFile);
 
-            // 4. Traffic interceptor setup
-            HttpTrafficInterceptor interceptor = new HttpTrafficInterceptor(hostFilter, trafficLogger);
+            // 4. Device Manager setup
+            com.apisniffer.device.DeviceManager deviceManager = new com.apisniffer.device.DeviceManager();
 
-            // 5. Proxy server setup
+            // 5. Web Dashboard setup
+            String hotspotIp = getHotspotIp();
+            com.apisniffer.web.WebServerManager webServer = null;
+            if (!noWeb) {
+                webServer = new com.apisniffer.web.WebServerManager(webPort, port, hotspotIp, deviceManager, certManager);
+                webServer.start();
+            }
+
+            // 6. Traffic interceptor setup
+            final com.apisniffer.web.WebServerManager finalWebServer = webServer;
+            HttpTrafficInterceptor interceptor = new HttpTrafficInterceptor(
+                    hostFilter,
+                    trafficLogger,
+                    deviceManager,
+                    finalWebServer != null ? finalWebServer::broadcastTraffic : null
+            );
+
+            // 7. Proxy server setup
             ProxyServerManager proxyServerManager = new ProxyServerManager(port, certManager, interceptor);
 
-            // 6. Graceful shutdown hook
+            // 8. Graceful shutdown hook
             ShutdownHookHandler shutdownHandler = new ShutdownHookHandler(proxyServerManager, trafficLogger);
+            if (webServer != null) {
+                shutdownHandler.addCleanupTask(webServer::stop);
+            }
             shutdownHandler.register();
 
-            // 7. Start proxy
+            // 9. Start proxy
             proxyServerManager.start();
             System.out.println();
             System.out.println(colorize(BOLD + BRIGHT_GREEN, "[✓] ApiSniffer proxy listening on 0.0.0.0:" + proxyServerManager.getPort()));
+            if (webServer != null) {
+                System.out.println(colorize(BOLD + BRIGHT_CYAN, "[✓] Web Dashboard running at:      http://localhost:" + webServer.getWebPort()));
+                if (hotspotIp != null) {
+                    System.out.println(colorize(BOLD + CYAN, "    Mobile Device Web Dashboard:   http://" + hotspotIp + ":" + webServer.getWebPort()));
+                }
+            }
 
             // Print local IP addresses to make hotspot setup painless
             printHostNetworkInfo(proxyServerManager.getPort());
@@ -184,5 +223,15 @@ public class ApiSnifferCli implements Callable<Integer> {
         } catch (Exception ignored) {
         }
         return list;
+    }
+
+    private String getHotspotIp() {
+        List<String> ips = getLocalIpAddresses();
+        for (String ip : ips) {
+            if (ip.startsWith("192.168.137.")) {
+                return ip;
+            }
+        }
+        return ips.isEmpty() ? "127.0.0.1" : ips.get(0);
     }
 }

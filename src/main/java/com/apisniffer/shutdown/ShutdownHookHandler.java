@@ -13,11 +13,18 @@ public class ShutdownHookHandler {
 
     private final ProxyServerManager proxyServerManager;
     private final TrafficLogger trafficLogger;
+    private final java.util.List<Runnable> cleanupTasks = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final AtomicBoolean executed = new AtomicBoolean(false);
 
     public ShutdownHookHandler(ProxyServerManager proxyServerManager, TrafficLogger trafficLogger) {
         this.proxyServerManager = proxyServerManager;
         this.trafficLogger = trafficLogger;
+    }
+
+    public void addCleanupTask(Runnable task) {
+        if (task != null) {
+            cleanupTasks.add(task);
+        }
     }
 
     public void register() {
@@ -27,6 +34,14 @@ public class ShutdownHookHandler {
     public void performShutdown() {
         if (!executed.compareAndSet(false, true)) {
             return;
+        }
+
+        // Run additional cleanup tasks (e.g. web server)
+        for (Runnable task : cleanupTasks) {
+            try {
+                task.run();
+            } catch (Exception ignored) {
+            }
         }
 
         // 1. Stop proxy
